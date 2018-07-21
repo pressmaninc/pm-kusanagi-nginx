@@ -1,42 +1,164 @@
-#//----------------------------------------------------------------------------
-#// Nginx Web Server ( for KUSANAGI Run on Docker )
-#//----------------------------------------------------------------------------
-FROM centos:7
-MAINTAINER kusanagi@prime-strategy.co.jp
+FROM alpine:3.8
 
-ENV KUSANAGI_VERSION		7.8.2-2
-ENV KUSANAGI_WP_VERSION		4.5.2-1
-ENV KUSANAGI_NGINX_VERSION	1.10.0-1
-ENV KUSANAGI_LIBBROTLI_VERSION	1.0pre1-2
-ENV KUSANAGI_OPENSSL_VERSION	1.0.2h-1
+LABEL maintainer="NGINX Docker Maintainers <docker-maint@nginx.com>"
 
-RUN groupadd -g 1000 www \
-	&& groupadd -g 1001 kusanagi \
-	&& useradd -d /home/httpd -c '' -s /bin/false -G www -M -u 1000 httpd \
-	&& useradd -d /home/kusanagi -c '' -s /bin/bash -g kusanagi -G www -u 1001 kusanagi \
-	&& chmod 755 /home/kusanagi
+ENV NGINX_VERSION 1.15.1
+# ARG NGX_BROTLI_VERSION
+ARG NGX_CACHE_PURGE_VERSION=2.3
 
-RUN \
-	curl -fSL https://repo.prime-strategy.co.jp/rpm/noarch/kusanagi-${KUSANAGI_VERSION}.noarch.rpm -o kusanagi.rpm \
-	&& curl -fSL https://repo.prime-strategy.co.jp/rpm/noarch/kusanagi-wp-${KUSANAGI_WP_VERSION}.noarch.rpm -o kusanagi-wp.rpm \
-	&& curl -fSL https://repo.prime-strategy.co.jp/rpm/noarch/kusanagi-nginx-${KUSANAGI_NGINX_VERSION}.noarch.rpm -o kusanagi-nginx.rpm \
-	&& curl -fSL https://repo.prime-strategy.co.jp/rpm/noarch/kusanagi-libbrotli-${KUSANAGI_LIBBROTLI_VERSION}.noarch.rpm -o kusanagi-libbrotli.rpm \
-	&& curl -fSL https://repo.prime-strategy.co.jp/rpm/noarch/kusanagi-openssl-${KUSANAGI_OPENSSL_VERSION}.noarch.rpm -o kusanagi-openssl.rpm \
-	&& rpm -Uvh --nodeps kusanagi.rpm kusanagi-openssl.rpm \
-	&& yum localinstall -y kusanagi-wp.rpm kusanagi-nginx.rpm kusanagi-libbrotli.rpm \
-	&& yum install -y wget openssl \
-	&& rm -f kusanagi*.rpm \
-	&& yum clean all
+RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
+	&& CONFIG="\
+		--prefix=/etc/nginx \
+		--sbin-path=/usr/sbin/nginx \
+		--modules-path=/usr/lib/nginx/modules \
+		--conf-path=/etc/nginx/nginx.conf \
+		--error-log-path=/var/log/nginx/error.log \
+		--http-log-path=/var/log/nginx/access.log \
+		--pid-path=/var/run/nginx.pid \
+		--lock-path=/var/run/nginx.lock \
+		--http-client-body-temp-path=/var/cache/nginx/client_temp \
+		--http-proxy-temp-path=/var/cache/nginx/proxy_temp \
+		--http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp \
+		--http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp \
+		--http-scgi-temp-path=/var/cache/nginx/scgi_temp \
+		--user=nginx \
+		--group=nginx \
+		--with-http_ssl_module \
+		--with-http_realip_module \
+		--with-http_addition_module \
+		--with-http_sub_module \
+		--with-http_dav_module \
+		--with-http_flv_module \
+		--with-http_mp4_module \
+		--with-http_gunzip_module \
+		--with-http_gzip_static_module \
+		--with-http_random_index_module \
+		--with-http_secure_link_module \
+		--with-http_stub_status_module \
+		--with-http_auth_request_module \
+		--with-http_xslt_module=dynamic \
+		--with-http_image_filter_module=dynamic \
+		--with-http_geoip_module=dynamic \
+		--with-threads \
+		--with-stream \
+		--with-stream_ssl_module \
+		--with-stream_ssl_preread_module \
+		--with-stream_realip_module \
+		--with-stream_geoip_module=dynamic \
+		--with-http_slice_module \
+		--with-mail \
+		--with-mail_ssl_module \
+		--with-compat \
+		--with-file-aio \
+		--with-http_v2_module \
+		--add-module=/usr/src/ngx_brotli \
+		--add-module=/usr/src/ngx_cache_purge-2.3 \
+	" \
+	&& addgroup -S nginx \
+	&& adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G nginx nginx \
+	&& apk upgrade --update \
+	&& apk add --no-cache --virtual .build-deps \
+		gcc \
+		libc-dev \
+		make \
+		openssl-dev \
+		pcre-dev \
+		zlib-dev \
+		linux-headers \
+		curl \
+		gnupg \
+		libxslt-dev \
+		gd-dev \
+		geoip-dev \
+	&& apk add --no-cache --virtual .build-brotli \
+		autoconf \
+		automake \
+		cmake \
+		git \
+		g++ \
+		libtool \
+	&& mkdir -p /usr/src \
+	&& git clone --recursive https://github.com/google/ngx_brotli.git /usr/src/ngx_brotli \
+	&& curl -fSL https://github.com/FRiCKLE/ngx_cache_purge/archive/${NGX_CACHE_PURGE_VERSION}.tar.gz -o ngx_cache_purge.tar.gz \
+	&& curl -fSL https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz -o nginx.tar.gz \
+	&& curl -fSL https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz.asc  -o nginx.tar.gz.asc \
+	&& export GNUPGHOME="$(mktemp -d)" \
+	&& found=''; \
+	for server in \
+		ha.pool.sks-keyservers.net \
+		hkp://keyserver.ubuntu.com:80 \
+		hkp://p80.pool.sks-keyservers.net:80 \
+		pgp.mit.edu \
+	; do \
+		echo "Fetching GPG key $GPG_KEYS from $server"; \
+		gpg --keyserver "$server" --keyserver-options timeout=10 --recv-keys "$GPG_KEYS" && found=yes && break; \
+	done; \
+	test -z "$found" && echo >&2 "error: failed to fetch GPG key $GPG_KEYS" && exit 1; \
+	gpg --batch --verify nginx.tar.gz.asc nginx.tar.gz \
+	&& rm -rf "$GNUPGHOME" nginx.tar.gz.asc \
+	&& tar -zxC /usr/src -f nginx.tar.gz \
+	&& rm nginx.tar.gz \
+	&& tar -zxC /usr/src -f ngx_cache_purge.tar.gz \
+	&& rm ngx_cache_purge.tar.gz \
+	&& cd /usr/src/nginx-$NGINX_VERSION \
+	&& ./configure $CONFIG --with-debug \
+	&& make -j$(getconf _NPROCESSORS_ONLN) \
+	&& mv objs/nginx objs/nginx-debug \
+	&& mv objs/ngx_http_xslt_filter_module.so objs/ngx_http_xslt_filter_module-debug.so \
+	&& mv objs/ngx_http_image_filter_module.so objs/ngx_http_image_filter_module-debug.so \
+	&& mv objs/ngx_http_geoip_module.so objs/ngx_http_geoip_module-debug.so \
+	&& mv objs/ngx_stream_geoip_module.so objs/ngx_stream_geoip_module-debug.so \
+	&& ./configure $CONFIG \
+	&& make -j$(getconf _NPROCESSORS_ONLN) \
+	&& make install \
+	&& rm -rf /etc/nginx/html/ \
+	&& mkdir /etc/nginx/conf.d/ \
+	&& mkdir -p /usr/share/nginx/html/ \
+	&& install -m644 html/index.html /usr/share/nginx/html/ \
+	&& install -m644 html/50x.html /usr/share/nginx/html/ \
+	&& install -m755 objs/nginx-debug /usr/sbin/nginx-debug \
+	&& install -m755 objs/ngx_http_xslt_filter_module-debug.so /usr/lib/nginx/modules/ngx_http_xslt_filter_module-debug.so \
+	&& install -m755 objs/ngx_http_image_filter_module-debug.so /usr/lib/nginx/modules/ngx_http_image_filter_module-debug.so \
+	&& install -m755 objs/ngx_http_geoip_module-debug.so /usr/lib/nginx/modules/ngx_http_geoip_module-debug.so \
+	&& install -m755 objs/ngx_stream_geoip_module-debug.so /usr/lib/nginx/modules/ngx_stream_geoip_module-debug.so \
+	&& ln -s ../../usr/lib/nginx/modules /etc/nginx/modules \
+	&& strip /usr/sbin/nginx* \
+	&& strip /usr/lib/nginx/modules/*.so \
+	&& rm -rf /usr/src/nginx-$NGINX_VERSION \
+	&& rm -rf /usr/src/ngx_brotli \
+	&& rm -rf /usr/src/ngx_cache_purge-${NGX_CACHE_PURGE_VERSION} \
+	\
+	# Bring in gettext so we can get `envsubst`, then throw
+	# the rest away. To do this, we need to install `gettext`
+	# then move `envsubst` out of the way so `gettext` can
+	# be deleted completely, then move `envsubst` back.
+	&& apk add --no-cache --virtual .gettext gettext \
+	&& mv /usr/bin/envsubst /tmp/ \
+	\
+	&& runDeps="$( \
+		scanelf --needed --nobanner --format '%n#p' /usr/sbin/nginx /usr/lib/nginx/modules/*.so /tmp/envsubst \
+			| tr ',' '\n' \
+			| sort -u \
+			| awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
+	)" \
+	&& apk add --no-cache --virtual .nginx-rundeps $runDeps \
+	&& apk del .build-deps \
+	&& apk del .gettext \
+	&& mv /tmp/envsubst /usr/local/bin/ \
+	\
+	# Bring in tzdata so users could set the timezones through the environment
+	# variables
+	&& apk add --no-cache tzdata \
+	\
+	# forward request and error logs to docker log collector
+	&& ln -sf /dev/stdout /var/log/nginx/access.log \
+	&& ln -sf /dev/stderr /var/log/nginx/error.log
 
-RUN mkdir -p /var/log/nginx /etc/nginx/conf.d /etc/httpd/conf.d \
-	&& sed -i 's/^sed.*\/etc\/hosts/#sed/' /usr/lib/kusanagi/lib/virt.sh \
-	&& sed -i 's/systemctl/\/bin\/true/g' /usr/lib/kusanagi/lib/virt.sh
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY nginx.vh.default.conf /etc/nginx/conf.d/default.conf
 
-VOLUME /home/kusanagi
-VOLUME /etc/nginx/conf.d
-VOLUME /etc/httpd/conf.d
-VOLUME /etc/kusanagi.d
+EXPOSE 80
 
-COPY files/docker-entrypoint.sh /
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "/usr/sbin/nginx", "-g", "daemon off;" ]
+STOPSIGNAL SIGTERM
+
+CMD ["nginx", "-g", "daemon off;"]
