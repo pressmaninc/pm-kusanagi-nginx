@@ -1,8 +1,8 @@
 FROM alpine:3.8
 
-LABEL maintainer="NGINX Docker Maintainers <docker-maint@nginx.com>"
+LABEL maintainer="Yosuke Nakatsukasa <yosuke_nakatsukasa@pressman.ne.jp>"
 
-ENV NGINX_VERSION 1.15.1
+ENV NGINX_VERSION 1.15.2
 # ARG NGX_BROTLI_VERSION
 ARG NGX_CACHE_PURGE_VERSION=2.3
 
