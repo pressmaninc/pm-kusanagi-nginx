@@ -1,8 +1,8 @@
 FROM alpine:3.8
 
-LABEL maintainer="Yosuke Nakatsukasa <yosuke_nakatsukasa@pressman.ne.jp>"
+LABEL maintainer="PRESSMAN <wp10@pressman.ne.jp>"
 
-ENV NGINX_VERSION 1.15.6
+ENV NGINX_VERSION 1.15.7
 # ARG NGX_BROTLI_VERSION
 ARG NGX_CACHE_PURGE_VERSION=2.3
 
