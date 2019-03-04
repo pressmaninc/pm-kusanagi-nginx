@@ -5,6 +5,8 @@ Nginx Web Server( for KUSANAGI Runs on Docker Ver. PRESSMAN)
 # Versions (tags)
 
 - latest
+- 1.15.9
+- 1.15.8-1
 - 1.15.8
 - 1.15.7
 - 1.15.6
@@ -16,7 +18,7 @@ Nginx Web Server( for KUSANAGI Runs on Docker Ver. PRESSMAN)
 
 # Image Content
 
-- alpine:3.8
+- alpine:3.9
 - nginx:1.15.x
 - ngx_brotli
 - ngx_cache_purge:2.3
