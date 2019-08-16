@@ -1,10 +1,10 @@
-FROM alpine:3.9
+FROM alpine:3.10
 
 LABEL maintainer="PRESSMAN <wp10@pressman.ne.jp>"
 
-ENV NGINX_VERSION 1.17.2
-ENV NJS_VERSION   0.3.3
-ENV PKG_RELEASE 1
+ENV NGINX_VERSION 1.17.3
+ENV NJS_VERSION   0.3.4
+ENV PKG_RELEASE   1
 ARG NGX_CACHE_PURGE_VERSION=2.3
 
 RUN set -x \
@@ -62,7 +62,7 @@ RUN set -x \
                 && cd pkg-oss \
                 && hg up ${NGINX_VERSION}-${PKG_RELEASE} \
                 && cd alpine \
-                && sed -i -e 's/BASE_CONFIGURE_ARGS=/BASE_CONFIGURE_ARGS=\\	--add-module=\/usr\/src\/ngx_brotli \\	--add-module=\/usr\/src\/ngx_cache_purge-2.3 /' Makefile \
+                && sed -i -e 's/BASE_CONFIGURE_ARGS=/BASE_CONFIGURE_ARGS=\\	--add-module=\/usr\/src\/ngx_brotli \\	--add-module=\/usr\/src\/ngx_cache_purge-${NGX_CACHE_PURGE_VERSION} /' Makefile \
                 && make all \
                 && apk index -o ${tempDir}/packages/alpine/${apkArch}/APKINDEX.tar.gz ${tempDir}/packages/alpine/${apkArch}/*.apk \
                 && abuild-sign -k ${tempDir}/.abuild/abuild-key.rsa ${tempDir}/packages/alpine/${apkArch}/APKINDEX.tar.gz \
@@ -72,7 +72,7 @@ RUN set -x \
             && apk del .build-deps \
             ;; \
     esac \
-    && apk add --no-cache $nginxPackages \
+    && apk add --no-cache --update $nginxPackages \
 # if we have leftovers from building, let's purge them (including extra, unnecessary build deps)
     && if [ -n "$tempDir" ]; then rm -rf "$tempDir"; fi \
     && if [ -n "/etc/apk/keys/abuild-key.rsa.pub" ]; then rm -f /etc/apk/keys/abuild-key.rsa.pub; fi \
