@@ -5,6 +5,7 @@ Nginx Web Server( for KUSANAGI Runs on Docker Ver. PRESSMAN)
 # Versions (tags)
 
 - latest
+- 1.17.5
 - 1.17.4
 - 1.17.3
 - 1.17.2
